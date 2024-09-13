@@ -34,18 +34,23 @@ async function promptSessionStart() {
 
 /**
  * Get user's follows and followers, returns a tuple.
- * @returns {Promise<(object, object)>}
+ * @returns {Promise<[import("@atproto/api").AppBskyActorDefs.ProfileView[], import("@atproto/api").AppBskyActorDefs.ProfileView[]]>
  */
 async function getFollowersAndFollowing() {
     const { data: followersData } = await agent.getFollowers({ actor: agent.did })
     const { data: followingData } = await agent.getFollows({ actor: agent.did })
 
-    console.log(inspect(followersData))
-    console.log(inspect(followingData))
-
-    return [followersData, followingData]
+    return [followersData.followers, followingData.follows]
 }
 
 await askUserPDS()
 await promptSessionStart()
 const [followers, follows] = await getFollowersAndFollowing()
+
+for (const follow of follows) {
+    const foundRelatedFollower = followers.find((follower) => follower.did === follow.did) // Find by DID
+
+    if (foundRelatedFollower) continue; // skip for now
+
+    console.log("Found NonMutual Follow:", follow.displayName ?? "@" + follow.handle)
+}
