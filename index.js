@@ -1,4 +1,4 @@
-import { AtpAgent } from "@atproto/api";
+import { Agent, CredentialSession } from "@atproto/api";
 import { input } from "./common/stdio.js";
 import { inspect } from "node:util";
 
@@ -11,9 +11,11 @@ async function askUserPDS() {
     /** @type {string} */
     const output = await input("PDS URL: ") ?? "https://bsky.social" // Default to BSKY AppService;
 
-    agent = new AtpAgent({
+    const credSession = new CredentialSession({
         service: output
     })
+
+    agent = new Agent(credSession)
 }
 
 async function promptSessionStart() {
