@@ -19,8 +19,11 @@ so um, yeah, it's now a thing
 
 ## Running
 
+> [!CAUTION]
+> Do not run random scripts from the internet. Check what they do before actually running them.
+
 - Download or clone this repository
-- Open a terminal and navigate to the repo
+- Open a terminal and navigate to the cloned folder
 - Install dependencies using `npm i`
 - Run the program with `npm start`
 - Follow the on-screen instructions
