@@ -114,12 +114,9 @@ console.debug(inspect(data, false, 100, true))
 let unfollowedAccounts = 0;
 
 for await (const follow of data) {
-  if (follow.viewer?.followedBy) {
-    console.debug("Mutual " + follow.displayName || "@" + follow.handle);
-    continue;
-  } // They are following us, do not unfollow them
+  if (follow.viewer?.followedBy) continue; // They are following us, do not unfollow them
 
-  console.debug("NonMutual", follow.displayName || "@" + follow.handle);
+  console.debug("Attempting to unfollow ", follow.displayName || "@" + follow.handle);
   try {
     // @ts-expect-error FUCKING HELL AGENT IS ASSIGNED YOU DIPSHIT
     agent.deleteFollow(follow.viewer?.following);
