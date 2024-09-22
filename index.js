@@ -1,8 +1,8 @@
+//@ts-check
 import { AtpAgent, CredentialSession } from "@atproto/api";
 import { input } from "./common/stdio.js";
 import { inspect } from "node:util";
 import { writeFile, open, stat } from "node:fs/promises";
-import { delay } from "./common/delay.js";
 
 import readlineSync from "readline-sync";
 
@@ -10,6 +10,7 @@ import readlineSync from "readline-sync";
  * @type {import("@atproto/api").AtpAgent}
  */
 let agent;
+
 async function promptSessionStart() {
   const service = await input("Service (If unsure, use https://bsky.social): ");
   agent = new AtpAgent({
@@ -49,55 +50,91 @@ async function promptSessionStart() {
     });
   }
 
-  const { data: profileData } = await agent.getProfile({ actor: agent.did });
+  const { data: profileData } = await agent.getProfile({ actor: agent.did ?? "" });
 
   console.info(
-    `Logged in as ${profileData.displayName || "@" + profileData.handle} ${
-      profileData.displayName && `(@${profileData.handle})`
+    `Logged in as ${profileData.displayName || "@" + profileData.handle} ${profileData.displayName && `(@${profileData.handle})`
     }`
   );
+  console.debug("DID: " + profileData.did);
   console.info(
     `Followers: ${profileData.followersCount} | Following: ${profileData.followsCount}`
   );
 }
 
 /**
- * Get user's follows and followers, returns a tuple.
- * @returns {Promise<[import("@atproto/api").AppBskyActorDefs.ProfileView[], import("@atproto/api").AppBskyActorDefs.ProfileView[]]>
+ * Get user's follows, returns an array of ProfileViews
+ * @returns {Promise<import("@atproto/api").AppBskyActorDefs.ProfileView[]>}
  */
-async function getFollowersAndFollowing() {
-  const { data: followersData } = await agent.getFollowers({
-    actor: agent.did,
-  });
-  const { data: followingData } = await agent.getFollows({ actor: agent.did });
+async function getFollowing() {
+  console.log("Indexing follows, please be patient...")
+  /** @type {import("@atproto/api").AppBskyActorDefs.ProfileView[]} */
+  const aggregateData = [] // Add this just in case we have a cursor, which we most definitely will have
 
-  return [followersData.followers, followingData.follows];
+  // First fetch
+  const { data } = await agent.getFollows({
+    actor: agent.did ?? "",
+    limit: 100,
+  });
+  
+  aggregateData.push(...data.follows)
+
+  /**
+   * @param {string} [cursor] - Optional cursor, used for pagination
+   */
+  async function fetchWithCursor(cursor) {
+    const { data } = await agent.getFollows({
+      actor: agent.did ?? "",
+      limit: 2,
+      cursor
+    });
+    aggregateData.push(...data.follows)
+
+    if (data.cursor) {
+      // recursion, my beloved
+      await fetchWithCursor(data.cursor)
+
+      // who needs ratelimits anyway? :clueless:
+    }
+  }
+
+  if (data.cursor) {
+    await fetchWithCursor(data.cursor)
+  }
+
+  return aggregateData
 }
 
 await promptSessionStart();
-const [followers, follows] = await getFollowersAndFollowing();
+const data = await getFollowing();
 
-for await (const follow of follows) {
-  const foundRelatedFollower = followers.find(
-    (follower) => follower.did === follow.did
-  ); // Find by DID
+console.debug(inspect(data, false, 100, true))
 
-  if (foundRelatedFollower) continue;
+let unfollowedAccounts = 0;
 
-  console.log("Unfollowing", follow.displayName ?? "@" + follow.handle);
+for await (const follow of data) {
+  if (follow.viewer?.followedBy) {
+    console.debug("Mutual " + follow.displayName || "@" + follow.handle);
+    continue;
+  } // They are following us, do not unfollow them
+
+  console.debug("NonMutual", follow.displayName || "@" + follow.handle);
   try {
-    await agent.deleteFollow(follow.viewer.following);
+    // @ts-expect-error FUCKING HELL AGENT IS ASSIGNED YOU DIPSHIT
+    agent.deleteFollow(follow.viewer?.following);
+    unfollowedAccounts++
   } catch (error) {
-    console.error("[ERROR] Could not delete follow", follow.handle + ".", "Stack trace included below:\n" + inspect(error, false, 1, true))
+    console.error("[ERROR] Could not delete follow", follow.handle + ".", "Stack trace included below.")
+    throw error // Bubble the exeption up
   }
-
-  await delay(2); // Artificial delay, as I don't want to do ratelimiting :)
 }
 
 // Assume we are done, hopefully, no errors should be thrown
-
+console.log(`Deleted ${unfollowedAccounts} follows from your account.`)
 console.log(
-  "Seems like everything is done! Check your follows on",
+  "Please double check your follows on",
+  //@ts-expect-error agent IS initialized, typescript is just clueless about it
   agent.serviceUrl.host,
   "to make sure the users listed were unfollowed!"
 );
+console.log("If any are missing, please report an issue on GitHub.")
