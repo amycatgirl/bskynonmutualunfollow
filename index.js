@@ -1,6 +1,7 @@
 //@ts-check
-import { AtpAgent, CredentialSession } from "@atproto/api";
+import { AtpAgent } from "@atproto/api";
 import { input } from "./common/stdio.js";
+import { delay } from "./common/delay.js"
 import { inspect } from "node:util";
 import { writeFile, open, stat } from "node:fs/promises";
 
@@ -124,8 +125,18 @@ for await (const follow of data) {
     agent.deleteFollow(follow.viewer?.following);
     unfollowedAccounts++
   } catch (error) {
-    console.error("[ERROR] Could not delete follow", follow.handle + ".", "Stack trace included below.")
-    throw error // Bubble the exeption up
+    if (error.headers && error.headers["RateLimit-Reset"]) {
+      const resetIn = error.headers["RateLimit-Reset"]
+      console.log(`⚠️ Rate limited for ${resetIn}`)
+      delay(resetIn)
+      console.log(`Alright, we can continue unfollowing for the next 5k requests`)
+
+      // @ts-expect-error typescript, please, agent is assigned to something, chill out.
+      agent.deleteFollow(follow.viewer?.following);
+    } else {
+      console.error("[ERROR] Could not delete follow", follow.handle + ".", "Halting...")
+      throw error // Bubble the exeption up
+    }
   }
 }
 
