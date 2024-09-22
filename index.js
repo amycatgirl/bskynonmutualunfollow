@@ -2,7 +2,6 @@
 import { AtpAgent } from "@atproto/api";
 import { input } from "./common/stdio.js";
 import { delay } from "./common/delay.js"
-import { inspect } from "node:util";
 import { writeFile, open, stat } from "node:fs/promises";
 
 import readlineSync from "readline-sync";
@@ -109,7 +108,6 @@ async function getFollowing() {
 await promptSessionStart();
 const data = await getFollowing();
 
-console.debug(inspect(data, false, 100, true))
 
 let unfollowedAccounts = 0;
 
